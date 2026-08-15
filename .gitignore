@@ -1,0 +1,14 @@
+# Claude Code local settings (contains permission rules, not secrets)
+.claude/settings.local.json
+
+# Temp rotated images from OCR testing
+tmp_report_rotated/
+
+# Windows service backup (not project-related)
+CoworkVMService-service-backup.reg
+
+# Scratchpad / temp
+*.pyc
+__pycache__/
+node_modules/
+.env

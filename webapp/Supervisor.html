@@ -1,0 +1,776 @@
+<!doctype html>
+<html><head><base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>RAC Supervisor</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:#f4f5f3;color:#1c1c1c;font-family:-apple-system,system-ui,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.hide{display:none!important}
+
+/* ── Login ── */
+.gate{position:fixed;inset:0;background:#1e4620;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;padding:20px}
+.gate .logo{font-size:28px;font-weight:bold;color:#fff;letter-spacing:1px}
+.gate .sub{font-size:14px;color:rgba(255,255,255,.6);margin:4px 0 28px}
+.gate input{width:240px;padding:14px;font-size:17px;border:0;border-radius:10px;text-align:center;margin-bottom:10px;background:#fff;color:#1c1c1c}
+.gate .go{margin-top:8px;padding:14px 40px;font-size:17px;border:0;border-radius:10px;background:#fff;color:#1e4620;font-weight:bold;cursor:pointer}
+.gate .go:active{background:#e8e8e8}
+.gate .msg{margin-top:12px;font-size:14px;color:rgba(255,255,255,.85);min-height:20px}
+
+/* ── Header ── */
+.hdr{position:sticky;top:0;z-index:100;background:#1e4620;color:#fff;padding:11px 14px;display:flex;justify-content:space-between;align-items:center}
+.hdr b{font-size:16px}
+.hdr .who{font-size:12px;opacity:.8;margin-right:8px}
+.hdr .out{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer}
+.hdr .out:active{background:rgba(255,255,255,.2)}
+
+/* ── Config bar ── */
+.cfg{background:#fff;border-bottom:1px solid #e2e2e2;padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.cfg label{font-size:11px;color:#777;text-transform:uppercase;letter-spacing:.4px;display:flex;flex-direction:column;gap:3px}
+.cfg select,.cfg input[type=date]{padding:7px 8px;border:1px solid #ccc;border-radius:6px;font-size:14px;background:#fff;color:#1c1c1c}
+.sbtn{display:inline-flex}
+.sbtn button{padding:8px 18px;border:1px solid #1e4620;background:#fff;color:#1e4620;font-size:14px;font-weight:bold;cursor:pointer;transition:all .15s}
+.sbtn button:first-child{border-radius:8px 0 0 8px}
+.sbtn button:last-child{border-radius:0 8px 8px 0;border-left:0}
+.sbtn button.on{background:#1e4620;color:#fff}
+.sbtn button:active{opacity:.8}
+.cfg-warn{font-size:11px;color:#b5651d;width:100%;margin-top:-4px;display:none}
+
+/* ── Camera section ── */
+.cam{padding:32px 16px;text-align:center}
+.cam-btn{width:100%;max-width:380px;padding:24px 20px;background:#1e4620;color:#fff;border:0;border-radius:16px;font-size:18px;font-weight:bold;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:10px;margin:0 auto;box-shadow:0 4px 16px rgba(30,70,32,.25);transition:transform .1s}
+.cam-btn:active{transform:scale(.97)}
+.cam-btn .ico{font-size:52px;line-height:1}
+.cam-hint{font-size:13px;color:#888;margin-top:16px;line-height:1.6}
+.cam-hint b{color:#555}
+
+/* ── Processing ── */
+.proc{padding:40px 16px;text-align:center}
+.proc img{max-width:180px;max-height:200px;border-radius:10px;border:2px solid #1e4620;margin-bottom:18px;object-fit:contain}
+.proc .pmsg{font-size:17px;font-weight:bold;color:#1e4620;margin-bottom:12px}
+.spinner{width:36px;height:36px;border:3.5px solid #e2e2e2;border-top:3.5px solid #1e4620;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Review ── */
+.rev{padding:14px}
+.rev h3{margin:0 0 10px;font-size:16px;color:#1e4620}
+.rtbl{width:100%;border-collapse:collapse;font-size:13px;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #ddd}
+.rtbl th{background:#1e4620;color:#fff;padding:7px 6px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.3px}
+.rtbl td{padding:6px;border-top:1px solid #eee}
+.rtbl .r{text-align:right}
+.rtbl tfoot td{font-weight:bold;border-top:2px solid #1e4620;background:#eef3ee}
+.rev-note{font-size:12px;color:#777;margin-top:8px;line-height:1.5}
+.rev-acts{display:flex;gap:10px;margin-top:14px}
+.btn-save{flex:2;padding:16px;background:#1e4620;color:#fff;border:0;border-radius:12px;font-size:16px;font-weight:bold;cursor:pointer;transition:all .15s}
+.btn-save:active{background:#174018}
+.btn-save:disabled{background:#999;cursor:default}
+.btn-ret{flex:1;padding:14px;background:#fff;color:#1e4620;border:2px solid #1e4620;border-radius:12px;font-size:14px;font-weight:bold;cursor:pointer}
+.btn-ret:active{background:#eef3ee}
+
+/* ── Success ── */
+.succ{padding:40px 16px;text-align:center}
+.succ .chk{font-size:64px;line-height:1;margin-bottom:10px}
+.succ .smsg{font-size:22px;font-weight:bold;color:#1e4620;margin-bottom:4px}
+.succ .ssub{font-size:14px;color:#555;margin-bottom:28px}
+.btn-next{width:100%;max-width:380px;padding:16px;background:#1e4620;color:#fff;border:0;border-radius:12px;font-size:16px;font-weight:bold;cursor:pointer;margin:0 auto;display:block}
+.btn-next:active{background:#174018}
+
+/* ── Error ── */
+.err{padding:40px 16px;text-align:center}
+.err .eico{font-size:48px;margin-bottom:10px}
+.err .emsg{font-size:16px;color:#a32d2d;font-weight:bold;margin-bottom:6px}
+.err .edet{font-size:13px;color:#777;margin-bottom:20px;line-height:1.5}
+.btn-retry{padding:14px 28px;background:#1e4620;color:#fff;border:0;border-radius:10px;font-size:15px;font-weight:bold;cursor:pointer}
+
+/* ── History ── */
+.hist{padding:14px;border-top:3px solid #e8e8e8;margin-top:4px}
+.hist h4{margin:0 0 10px;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.6px}
+.hi{background:#fff;border:1px solid #e2e2e2;border-radius:8px;padding:10px 14px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.hi .ht{font-size:12px;color:#999}
+.hi .hv{font-size:14px;font-weight:bold;color:#1e4620}
+.htot{font-size:14px;font-weight:bold;color:#1e4620;padding-top:8px;border-top:1px solid #ddd;margin-top:4px}
+.hempty{font-size:13px;color:#bbb;padding:8px 0}
+</style>
+</head>
+<body>
+
+<!-- ═══ LOGIN ═══ -->
+<div class="gate" id="gate">
+  <div class="logo">RAC Dispatch</div>
+  <div class="sub">Supervisor Portal</div>
+  <input id="l-name" placeholder="Username" autocapitalize="off" autocomplete="username" inputmode="text">
+  <input id="l-pin" type="password" inputmode="text" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="PIN">
+  <button class="go" onclick="login()">Enter</button>
+  <div class="msg" id="l-msg"></div>
+</div>
+
+<!-- ═══ MAIN APP ═══ -->
+<div id="app" class="hide">
+
+  <!-- Header -->
+  <div class="hdr">
+    <b>RAC Supervisor</b>
+    <div style="display:flex;align-items:center">
+      <span class="who" id="who"></span>
+      <button class="out" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <!-- Config bar -->
+  <div class="cfg" id="config">
+    <label>Shift
+      <div class="sbtn">
+        <button id="s-A" onclick="setShift('A')">A</button>
+        <button id="s-B" onclick="setShift('B')">B</button>
+      </div>
+    </label>
+    <label>Press <select id="c-press" onchange="saveConfig()"><option value="">--</option></select></label>
+    <label>Operator <select id="c-op" onchange="saveConfig()"><option value="">--</option><option>Sunil Gaud</option><option>Munna Shah</option><option>Munna Kaul</option><option>Sudeshwar</option><option>Vijay Ram</option><option>Sanjay Kumar</option><option>Chandan Ram</option><option>Siya Saran</option><option>Rai Sahab</option></select></label>
+    <label>Date <input type="date" id="c-date" onchange="saveConfig()"></label>
+    <div class="cfg-warn" id="cfg-warn">⚠ Select Shift and Press before scanning</div>
+  </div>
+
+  <!-- File input (hidden) -->
+  <input type="file" accept="image/*" capture="environment" id="cam" style="display:none" onchange="onPhoto(this)">
+
+  <!-- ── STATE: Camera (default) ── -->
+  <div id="st-camera" class="cam">
+    <button class="cam-btn" onclick="takePic()">
+      <span class="ico">📷</span>
+      Scan Report
+    </button>
+    <div class="cam-hint">Take a <b>clear photo</b> of one production report page.<br>Good lighting • hold steady • full page visible.</div>
+  </div>
+
+  <!-- ── STATE: Processing ── -->
+  <div id="st-proc" class="proc hide">
+    <img id="preview" alt="Report">
+    <div class="pmsg" id="proc-msg">Reading report with AI...</div>
+    <div class="spinner" id="proc-spin"></div>
+  </div>
+
+  <!-- ── STATE: Review ── -->
+  <div id="st-review" class="rev hide">
+    <h3>✓ Found <span id="r-count">0</span> production lines</h3>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <table class="rtbl">
+        <thead><tr><th>Section</th><th class="r">Pcs</th><th class="r">Wt/Pc</th><th class="r">Output</th><th>Customer</th></tr></thead>
+        <tbody id="r-body"></tbody>
+        <tfoot id="r-foot"></tfoot>
+      </table>
+    </div>
+    <div class="rev-note">Check that the row count and key numbers look right.<br>The factory in-charge can correct details later.</div>
+    <div class="rev-acts">
+      <button class="btn-save" id="btn-save" onclick="saveAll()">✅ Save to Database</button>
+      <button class="btn-ret" onclick="retake()">🔄 Retake</button>
+    </div>
+  </div>
+
+  <!-- ── STATE: Success ── -->
+  <div id="st-success" class="succ hide">
+    <div class="chk">✅</div>
+    <div class="smsg" id="s-msg">Saved!</div>
+    <div class="ssub" id="s-sub"></div>
+    <button class="btn-next" onclick="resetCamera()">📷 Scan Another Report</button>
+  </div>
+
+  <!-- ── STATE: Error ── -->
+  <div id="st-error" class="err hide">
+    <div class="eico">⚠️</div>
+    <div class="emsg" id="e-msg">Something went wrong</div>
+    <div class="edet" id="e-det"></div>
+    <button class="btn-retry" onclick="resetCamera()">Try Again</button>
+  </div>
+
+  <!-- History -->
+  <div class="hist" id="hist-sec">
+    <h4>Today's Scans</h4>
+    <div id="h-list"><div class="hempty">No scans yet — take your first photo above</div></div>
+    <div class="htot hide" id="h-total"></div>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+//  RAC Supervisor Portal — photo OCR → production data
+// ══════════════════════════════════════════════════════════════
+
+// ── Constants ──
+var SB_URL  = 'https://qhvtrlktxfnvuijokkds.supabase.co';
+var SB_KEY  = 'sb_publishable_DcvIumd6LZaeq8xCyhk9GA_Eew-QZ9V';
+var OCR_URL = SB_URL + '/functions/v1/ocr-production';
+var sb      = supabase.createClient(SB_URL, SB_KEY);
+
+// ── State ──
+var USERNAME = '', SESSION_PIN = '', SHIFT = '', PRESS = '';
+var custMap = {}, custIdName = {}, sectName = {};
+var PRESS_DIA = {P1:127,P2:127,P4:127,P5:178,P6:127};
+var ALLOY_DEN = {}, DEFAULT_DENSITY = 2.70;
+var pendingRows = null, busy = false;
+var scans = [];  // {time, count, totalKg}
+
+// ── Helpers ──
+function $(id) { return document.getElementById(id); }
+function num(v) { var s = ('' + (v == null ? '' : v)).trim(); return s === '' ? null : Number(s); }
+function strv(v) { var s = ('' + (v == null ? '' : v)).trim(); return s || null; }
+function esc(s) { return ('' + (s == null ? '' : s)).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+function cid(name) { return custMap[('' + (name == null ? '' : name)).trim().toLowerCase()] || null; }
+
+function billetKg(press, lengthMm, alloy) {
+  var dia = PRESS_DIA[press], L = Number(lengthMm);
+  if (!dia || !L || isNaN(L)) return null;
+  var den = (alloy ? ALLOY_DEN[('' + alloy).toUpperCase()] : null) || DEFAULT_DENSITY;
+  var Dcm = dia / 10, Lcm = L / 10;
+  return Math.round((Math.PI / 4 * Dcm * Dcm * Lcm * den / 1000) * 100) / 100;
+}
+function calcInput(press, lengthMm, nBillets, alloy) {
+  var w = billetKg(press, lengthMm, alloy), n = Number(nBillets);
+  if (w == null || !n || isNaN(n)) return null;
+  return Math.round(w * n * 100) / 100;
+}
+
+function showState(name) {
+  ['camera','proc','review','success','error'].forEach(function(s) {
+    $('st-' + s).classList.toggle('hide', s !== name);
+  });
+  // Scroll to top on state change
+  window.scrollTo(0, 0);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  LOGIN
+// ══════════════════════════════════════════════════════════════
+
+$('l-name').addEventListener('keydown', function(e) { if (e.key === 'Enter') $('l-pin').focus(); });
+$('l-pin').addEventListener('keydown', function(e) { if (e.key === 'Enter') login(); });
+
+async function login() {
+  var u = ($('l-name').value || '').trim();
+  var p = ($('l-pin').value || '').trim();
+  if (!p) { $('l-msg').textContent = 'Enter your PIN'; return; }
+  $('l-msg').textContent = 'Checking...';
+  try {
+    var r = await sb.rpc('verify_login', { p_username: u, p_pin: p });
+    if (r.error) { $('l-msg').textContent = 'Error: ' + r.error.message; return; }
+    if (!r.data || !r.data.length) { $('l-msg').textContent = 'Wrong username or PIN'; return; }
+    USERNAME = r.data[0].name;
+    SESSION_PIN = p;
+    $('who').textContent = USERNAME;
+    $('gate').style.display = 'none';
+    $('app').classList.remove('hide');
+    await loadRefs();
+    restoreConfig();
+  } catch(e) {
+    $('l-msg').textContent = 'Error: ' + ((e && e.message) || e);
+  }
+}
+
+function logout() {
+  USERNAME = ''; SESSION_PIN = '';
+  $('gate').style.display = '';
+  $('app').classList.add('hide');
+  $('l-pin').value = '';
+  $('l-msg').textContent = '';
+  showState('camera');
+}
+window.login = login; window.logout = logout;
+
+// ══════════════════════════════════════════════════════════════
+//  REFERENCE DATA
+// ══════════════════════════════════════════════════════════════
+
+async function loadRefs() {
+  // Customers (for code matching)
+  try {
+    var cr = await sb.from('customers').select('customer_id,name,code,aliases');
+    if (cr.data) {
+      custMap = {}; custIdName = {};
+      cr.data.forEach(function(c) {
+        var lo = ('' + c.name).toLowerCase();
+        custMap[lo] = c.customer_id;
+        custIdName[c.customer_id] = c.name;
+        if (c.code) custMap[('' + c.code).toLowerCase()] = c.customer_id;
+        if (c.aliases) ('' + c.aliases).split(',').forEach(function(a) {
+          a = a.trim().toLowerCase(); if (a) custMap[a] = c.customer_id;
+        });
+      });
+    }
+  } catch(e) {}
+
+  // Sections (for display names)
+  try {
+    var sr = await sb.from('sections').select('section_no,section_name').limit(5000);
+    if (sr.data) {
+      sectName = {};
+      sr.data.forEach(function(s) {
+        if (s.section_name) sectName[('' + s.section_no).trim()] = s.section_name;
+      });
+    }
+  } catch(e) {}
+
+  // Presses (for billet calculations + dropdown)
+  try {
+    var pr = await sb.from('presses').select('press,billet_dia_mm,active');
+    if (pr.data && pr.data.length) {
+      PRESS_DIA = {};
+      var sel = $('c-press'), cur = sel.value;
+      sel.innerHTML = '<option value="">--</option>';
+      pr.data.forEach(function(p) {
+        PRESS_DIA[p.press] = Number(p.billet_dia_mm);
+        if (p.active !== false) {
+          var o = document.createElement('option');
+          o.textContent = p.press; o.value = p.press;
+          if (p.press === cur) o.selected = true;
+          sel.appendChild(o);
+        }
+      });
+    }
+  } catch(e) {}
+
+  // Alloys (for density in billet weight calc)
+  try {
+    var ar = await sb.from('alloys').select('alloy,density_g_cm3');
+    if (ar.data) {
+      ALLOY_DEN = {};
+      ar.data.forEach(function(a) {
+        ALLOY_DEN[('' + a.alloy).toUpperCase()] = Number(a.density_g_cm3);
+      });
+    }
+  } catch(e) {}
+}
+
+// ══════════════════════════════════════════════════════════════
+//  CONFIG (shift / press / operator / date)
+// ══════════════════════════════════════════════════════════════
+
+function setShift(s) {
+  SHIFT = s;
+  $('s-A').classList.toggle('on', s === 'A');
+  $('s-B').classList.toggle('on', s === 'B');
+  saveConfig();
+  checkConfig();
+}
+window.setShift = setShift;
+
+function saveConfig() {
+  try {
+    localStorage.setItem('rac_sv', JSON.stringify({
+      shift: SHIFT,
+      press: $('c-press').value,
+      op: $('c-op').value,
+      date: $('c-date').value
+    }));
+  } catch(e) {}
+  checkConfig();
+}
+window.saveConfig = saveConfig;
+
+function restoreConfig() {
+  try {
+    var c = JSON.parse(localStorage.getItem('rac_sv') || '{}');
+    if (c.shift) setShift(c.shift);
+    if (c.press) $('c-press').value = c.press;
+    if (c.op) $('c-op').value = c.op;
+  } catch(e) {}
+  // Date always defaults to today
+  $('c-date').value = new Date().toLocaleDateString('en-CA');
+  checkConfig();
+}
+
+function checkConfig() {
+  PRESS = ($('c-press').value || '').toUpperCase();
+  var ok = SHIFT && PRESS;
+  $('cfg-warn').style.display = ok ? 'none' : 'block';
+  return ok;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  CAMERA
+// ══════════════════════════════════════════════════════════════
+
+function takePic() {
+  if (!checkConfig()) {
+    $('cfg-warn').style.display = 'block';
+    $('config').scrollIntoView({ behavior: 'smooth' });
+    return;
+  }
+  $('cam').click();
+}
+window.takePic = takePic;
+
+function onPhoto(input) {
+  if (!input.files || !input.files.length) return;
+  if (busy) { input.value = ''; return; }
+  if (!checkConfig()) { input.value = ''; return; }
+  var file = input.files[0];
+  input.value = '';
+  processPhoto(file);
+}
+window.onPhoto = onPhoto;
+
+async function processPhoto(file) {
+  busy = true;
+  showState('proc');
+
+  // Show preview thumbnail
+  var objUrl = URL.createObjectURL(file);
+  $('preview').src = objUrl;
+  $('proc-msg').textContent = 'Reading report with AI...';
+  $('proc-spin').classList.remove('hide');
+
+  try {
+    // Downscale for API
+    var b64 = await downscale(file);
+
+    // Call OCR edge function
+    var resp = await fetch(OCR_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SB_KEY,
+        'Authorization': 'Bearer ' + SB_KEY
+      },
+      body: JSON.stringify({
+        image_base64: b64,
+        media_type: 'image/jpeg',
+        pin: SESSION_PIN
+      })
+    });
+
+    var data = null;
+    try { data = await resp.json(); } catch(e) {}
+
+    if (!resp.ok) {
+      showError(
+        'OCR failed',
+        (data && data.error) || ('Server returned HTTP ' + resp.status)
+      );
+      return;
+    }
+
+    var rows = (data && data.rows) || [];
+    if (!rows.length) {
+      showError(
+        'No rows found',
+        'The AI could not read any production lines from this photo. Try a clearer, well-lit photo of one report page.'
+      );
+      return;
+    }
+
+    // Map OCR rows to DB format
+    pendingRows = mapOcrRows(rows);
+    showReview(pendingRows);
+
+  } catch(e) {
+    showError('Error', (e && e.message) || '' + e);
+  } finally {
+    URL.revokeObjectURL(objUrl);
+    busy = false;
+  }
+}
+
+function downscale(file) {
+  return new Promise(function(res, rej) {
+    var img = new Image();
+    var url = URL.createObjectURL(file);
+    img.onload = function() {
+      var max = 2600, w = img.width, h = img.height;
+      var sc = Math.min(1, max / Math.max(w, h));
+      var cw = Math.max(1, Math.round(w * sc));
+      var ch = Math.max(1, Math.round(h * sc));
+      var cv = document.createElement('canvas');
+      cv.width = cw; cv.height = ch;
+      cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
+      URL.revokeObjectURL(url);
+      var durl = cv.toDataURL('image/jpeg', 0.9);
+      var i = durl.indexOf(',');
+      res(i >= 0 ? durl.slice(i + 1) : durl);
+    };
+    img.onerror = function() {
+      URL.revokeObjectURL(url);
+      rej(new Error('Could not read the photo'));
+    };
+    img.src = url;
+  });
+}
+
+function showError(title, detail) {
+  $('e-msg').textContent = title;
+  $('e-det').textContent = detail || '';
+  showState('error');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  ROW MAPPING — OCR output → lots table format
+// ══════════════════════════════════════════════════════════════
+
+function mapOcrRows(rawRows) {
+  var date  = $('c-date').value || new Date().toLocaleDateString('en-CA');
+  var press = PRESS;
+  var op    = $('c-op').value || '';
+
+  // Group by charge (multi-cut billets)
+  var groups = {}, order = [];
+  rawRows.forEach(function(o, idx) {
+    var c = ('' + (o.charge == null ? '' : o.charge)).trim();
+    if (!c) c = '_s' + idx;
+    if (!groups[c]) { groups[c] = []; order.push(c); }
+    groups[c].push(o);
+  });
+
+  var mapped = [];
+  order.forEach(function(c) {
+    var grp = groups[c];
+
+    // Share billet info within charge group
+    if (grp.length > 1) {
+      var bs = null, nb = null;
+      grp.forEach(function(o) {
+        if (!bs && strv(o.billet_length_mm)) bs = o.billet_length_mm;
+        if (!nb && strv(o.no_billets))       nb = o.no_billets;
+      });
+      grp.forEach(function(o) {
+        if (bs) o.billet_length_mm = bs;
+        if (nb) o.no_billets = nb;
+      });
+    }
+
+    var runNo = grp.length > 1
+      ? ('R' + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36) + mapped.length)
+      : null;
+
+    grp.forEach(function(o) {
+      var sec   = strv(o.section_no) || '';
+      var cuRaw = strv(o.customer) || '';
+      var cuId  = cuRaw ? cid(cuRaw) : null;
+      var cuDisp = (cuId && custIdName[cuId]) ? custIdName[cuId] : cuRaw;
+
+      var wt  = num(o.wt_pc);
+      var pcs = num(o.produced_pcs);
+      var outKg = num(o.output_kg);
+      if (outKg == null && wt != null && pcs != null)
+        outKg = Math.round(wt * pcs * 1000) / 1000;
+
+      var inpKg = calcInput(press, o.billet_length_mm, o.no_billets, o.alloy);
+      if (inpKg == null) inpKg = num(o.input_kg);
+
+      mapped.push({
+        // Display-only (stripped before insert)
+        _section:  sec,
+        _customer: cuDisp,
+        _pcs:      pcs,
+        _wtPc:     wt,
+        _outKg:    outKg,
+        _alloy:    strv(o.alloy) || '',
+        _cutLen:   strv(o.cut_length) || '',
+
+        // DB columns
+        produced_date:    date,
+        shift:            SHIFT,
+        press:            press || null,
+        operator:         op || strv(o.operator) || null,
+        supervisor:       USERNAME || strv(o.supervisor) || null,
+        shift_employees:  null,
+        casting_no:       strv(o.casting_no),
+        section_no:       sec || null,
+        section_name:     (sec && sectName[sec]) || null,
+        alloy:            strv(o.alloy) || null,
+        cavity:           num(o.cavity),
+        billet_size:      strv(o.billet_length_mm),
+        num_billets:      num(o.no_billets),
+        cut_length:       strv(o.cut_length),
+        wt_pc:            wt,
+        produced_pcs:     pcs,
+        output_kg:        outKg,
+        input_kg:         inpKg,
+        die_load_time:    strv(o.die_load) || null,
+        die_unload_time:  strv(o.die_unload) || null,
+        customer_id:      cuId,
+        needs_ageing:     true,
+        remarks:          strv(o.remarks) || null,
+        run_no:           runNo,
+        stage:            'final'
+      });
+    });
+  });
+
+  return mapped;
+}
+
+// Distribute billet input across multi-cut rows by output ratio
+function allocateRun(recs) {
+  if (!recs || recs.length < 2) return;
+  var f = recs[0];
+  var chargeIn = calcInput(f.press, f.billet_size, f.num_billets, f.alloy);
+  var outs = recs.map(function(x) {
+    var o = num(x.output_kg);
+    if (o == null) { var w = num(x.wt_pc), p = num(x.produced_pcs); o = (w != null && p != null) ? w * p : 0; }
+    return o;
+  });
+  var totOut = outs.reduce(function(a, b) { return a + b; }, 0);
+  recs.forEach(function(x, i) {
+    x.billet_size = f.billet_size;
+    x.num_billets = (i === 0 ? f.num_billets : 0);
+    if (chargeIn != null && totOut > 0)
+      x.input_kg = Math.round(chargeIn * outs[i] / totOut * 100) / 100;
+    else
+      x.input_kg = (i === 0 ? chargeIn : null);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  REVIEW
+// ══════════════════════════════════════════════════════════════
+
+function showReview(rows) {
+  showState('review');
+  $('r-count').textContent = rows.length;
+
+  var body = '', totalPcs = 0, totalKg = 0;
+  rows.forEach(function(r) {
+    totalPcs += (r._pcs || 0);
+    totalKg  += (r._outKg || 0);
+    body += '<tr>'
+      + '<td><b>' + esc(r._section) + '</b>'
+      + (r._alloy ? ' <span style="color:#777;font-size:11px">' + esc(r._alloy) + '</span>' : '')
+      + '</td>'
+      + '<td class="r">' + (r._pcs != null ? r._pcs : '-') + '</td>'
+      + '<td class="r">' + (r._wtPc != null ? r._wtPc : '-') + '</td>'
+      + '<td class="r">' + (r._outKg != null ? Math.round(r._outKg) : '-') + '</td>'
+      + '<td>' + esc(r._customer || 'Stock') + '</td>'
+      + '</tr>';
+  });
+  $('r-body').innerHTML = body;
+  $('r-foot').innerHTML = '<tr>'
+    + '<td>Total</td>'
+    + '<td class="r">' + totalPcs + '</td>'
+    + '<td></td>'
+    + '<td class="r">' + Math.round(totalKg) + ' kg</td>'
+    + '<td></td></tr>';
+
+  // Reset save button
+  $('btn-save').disabled = false;
+  $('btn-save').textContent = '✅ Save to Database';
+}
+
+function retake() {
+  pendingRows = null;
+  showState('camera');
+}
+window.retake = retake;
+
+// ══════════════════════════════════════════════════════════════
+//  SAVE TO DATABASE
+// ══════════════════════════════════════════════════════════════
+
+async function saveAll() {
+  if (!pendingRows || !pendingRows.length || busy) return;
+  busy = true;
+
+  $('btn-save').disabled = true;
+  $('btn-save').textContent = 'Saving...';
+
+  // Build clean DB records (strip _display fields)
+  var recs = pendingRows.map(function(r) {
+    var rec = {};
+    Object.keys(r).forEach(function(k) {
+      if (k.charAt(0) !== '_') rec[k] = r[k];
+    });
+    return rec;
+  });
+
+  // Handle multi-cut billet allocation
+  var byRun = {};
+  recs.forEach(function(r) {
+    if (r.run_no) (byRun[r.run_no] = byRun[r.run_no] || []).push(r);
+  });
+  Object.keys(byRun).forEach(function(k) { allocateRun(byRun[k]); });
+
+  try {
+    // Insert in chunks of 50
+    var ok = 0, fails = [];
+    for (var i = 0; i < recs.length; i += 50) {
+      var chunk = recs.slice(i, i + 50);
+      $('btn-save').textContent = 'Saving ' + (i + 1) + '/' + recs.length + '...';
+      var r = await sb.from('lots').insert(chunk);
+      if (!r.error) { ok += chunk.length; }
+      else {
+        // Try one by one
+        for (var j = 0; j < chunk.length; j++) {
+          var rr = await sb.from('lots').insert([chunk[j]]);
+          if (!rr.error) ok++;
+          else fails.push({ i: i + j, msg: rr.error.message });
+        }
+      }
+    }
+
+    if (fails.length && ok === 0) {
+      showError('Save failed', fails[0].msg);
+      busy = false;
+      return;
+    }
+
+    // Log to session history
+    var totalKg = 0;
+    pendingRows.forEach(function(r) { totalKg += (r._outKg || 0); });
+
+    scans.unshift({
+      time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      count: ok,
+      totalKg: Math.round(totalKg)
+    });
+
+    $('s-msg').textContent = ok + ' lines saved!';
+    $('s-sub').textContent = Math.round(totalKg) + ' kg output recorded'
+      + (fails.length ? ' (' + fails.length + ' failed)' : '');
+    pendingRows = null;
+
+    showState('success');
+    renderHistory();
+
+  } catch(e) {
+    showError('Save failed', (e && e.message) || '' + e);
+  } finally {
+    busy = false;
+  }
+}
+window.saveAll = saveAll;
+
+function resetCamera() {
+  showState('camera');
+  $('btn-save').disabled = false;
+  $('btn-save').textContent = '✅ Save to Database';
+}
+window.resetCamera = resetCamera;
+
+// ══════════════════════════════════════════════════════════════
+//  HISTORY
+// ══════════════════════════════════════════════════════════════
+
+function renderHistory() {
+  if (!scans.length) {
+    $('h-list').innerHTML = '<div class="hempty">No scans yet — take your first photo above</div>';
+    $('h-total').classList.add('hide');
+    return;
+  }
+  var h = '';
+  scans.forEach(function(s) {
+    h += '<div class="hi">'
+      + '<span class="ht">' + s.time + '</span>'
+      + '<span class="hv">' + s.count + ' lines • ' + s.totalKg + ' kg</span>'
+      + '</div>';
+  });
+  $('h-list').innerHTML = h;
+
+  var tl = 0, tk = 0;
+  scans.forEach(function(s) { tl += s.count; tk += s.totalKg; });
+  $('h-total').textContent = 'This session: ' + tl + ' lines • ' + tk + ' kg';
+  $('h-total').classList.remove('hide');
+}
+
+</script>
+</body></html>
